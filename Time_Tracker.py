@@ -1,3 +1,9 @@
+# Time_Tracker.py
+# By: Mateo Lopez Moncaleano
+# Description: A Windows task tracker that logs tasks, breaks, and total time into a CSV file.
+# Created: 2025-11-09
+# Version: 1.0
+
 import keyboard
 import win32gui
 import win32con
