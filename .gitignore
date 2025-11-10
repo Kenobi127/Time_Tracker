@@ -1,0 +1,4 @@
+build/
+dist/
+.gitattributes
+Time_Tracker.spec
