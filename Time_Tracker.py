@@ -6,14 +6,16 @@ from datetime import datetime, timedelta
 import ctypes
 import os
 import csv
+import sys
 
 ctypes.windll.kernel32.SetConsoleTitleW("Time Tracker App")
-time.sleep(0.1)
+time.sleep(0.1) #sometimes the title wont be set before hwnd happens, so small delay
 hwnd = win32gui.FindWindow(None, "Time Tracker App")
 
 START_HOTKEY = "+"
 END_HOTKEY = "-"
 BREAK_HOTKEY = "*"
+DELAY_TIME = 2 #seconds
 
 running_task = False
 running_break = False
@@ -28,37 +30,38 @@ total_break_time = timedelta(0)
 
 TIME_FORMAT = "%H:%M:%S"
 
-CSV_FILE = "tasks.csv"
+if getattr(sys, 'frozen', False):
+    #directory of the .exe
+    BASE_DIR = os.path.dirname(sys.executable)  
+else:
+    #path of the current folder as a python file
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+CSV_FILE = os.path.join(BASE_DIR, "task.csv")
+
 file_exists = os.path.exists(CSV_FILE)
 
-input("hello")
-
-
 try:
-    # Check if the file already exists
-    file_exists = os.path.exists(CSV_FILE)
-
-    # Open the file in append mode
+    #open the file in append mode
     with open(CSV_FILE, mode="a", newline="") as file:
         writer = csv.writer(file)
-
-        # Write header only if file didn't exist
+        print(f"CSV file path: {CSV_FILE}")
+        #write header only if file didn't exist
         if not file_exists:
             writer.writerow(["Task", "Start Time", "End Time", "Total Time (min)", "Break Time (min)", "Date"])
 
-
+#openign file error handler
 except Exception as e:
+    print("\n\n\n\n")
     print(f"Error writing to {CSV_FILE}: {e}")
+    print("Be sure to close the CSV everywhere before running this program.")
+    input("Press enter to exit.")
+    raise SystemExit()
 
-
-
-input("hello")
-
-
-
+#short delay restore and minimize
 def short_restore():
     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-    time.sleep(3)
+    time.sleep(DELAY_TIME)
     win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
 
 def minimize():
@@ -66,83 +69,93 @@ def minimize():
 
 def restore():
     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-    win32gui.SetForegroundWindow(hwnd)
+    win32gui.SetForegroundWindow(hwnd)  #get keyboard focus
 
+#saves the task into a csv file
 def save_task():
     global total_break_time
-    total_task_time = (task_end_time - task_start_time).total_seconds() / 60
-    total_break_minutes = total_break_time.total_seconds() / 60
-    date = task_start_time.strftime("%m-%d-%Y")
-    with open(CSV_FILE, "a", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow([
-            task_name,
-            task_start_time.strftime(TIME_FORMAT),
-            task_end_time.strftime(TIME_FORMAT),
-            round(total_task_time,2),
-            round(total_break_minutes,2),
-            date
-        ])
-    print(f"{datetime.now().strftime(TIME_FORMAT)}: Task '{task_name}' saved! Total: {round(total_task_time,2)} min, Break: {round(total_break_minutes,2)} min")
-    total_break_time = timedelta(0)
+    total_task_time = timedelta(seconds=int((task_end_time - task_start_time).total_seconds())) #calculate total time and remove microseconds
+    total_break_time = timedelta(seconds=int(total_break_time.total_seconds()))  #remove microseconds
+    date = task_start_time.strftime("%Y-%m-%d")
 
+    while True:
+        try:
+            with open(CSV_FILE, "a", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow([
+                    task_name,
+                    task_start_time.strftime(TIME_FORMAT),
+                    task_end_time.strftime(TIME_FORMAT),
+                    total_task_time,
+                    total_break_time,
+                    date
+                ])
+            print(f"{datetime.now().strftime(TIME_FORMAT)}: Task '{task_name}' saved! Total: {total_task_time}, Break: {total_break_time}")
+            total_break_time = timedelta(0)
+            break
+        except Exception as e:
+            print(f"{datetime.now().strftime(TIME_FORMAT)}: Failed to save task '{task_name}': {e}")
+            input("Close any programs using the CSV and press Enter to try again...")
+
+#prompts the user to enter a task name, takes the time and minimizes
 def start_task():
     global running_task, task_name, task_start_time
+    restore()
     if running_task:
         restore()
-        input(f"{datetime.now().strftime(TIME_FORMAT)}: Task running, press {END_HOTKEY} to end task first.")
+        print(f"{datetime.now().strftime(TIME_FORMAT)}: Task running, press {END_HOTKEY} first to end task.")
+        time.sleep(DELAY_TIME)
         minimize()
         return
     running_task = True
-    restore()
     task_name = input(f"{datetime.now().strftime(TIME_FORMAT)}: Enter new task name: ")
     task_start_time = datetime.now()
     print(f"{task_start_time.strftime(TIME_FORMAT)}: New task '{task_name}' started.")
     minimize()
 
+#checks if there is a current task, ends it and calls save task
 def end_task():
     global running_task, running_break, task_end_time
-    if not running_task:
-        restore()
-        print(f"{datetime.now().strftime(TIME_FORMAT)}: No task is currently running. Press {START_HOTKEY} to start a task.")
-        time.sleep(1.5)
-        minimize()
-        return
-    if running_break:
-        stop_break()
     restore()
-    task_end_time = datetime.now()
-    save_task()
-    input(f"{datetime.now().strftime(TIME_FORMAT)}: Press enter to minimize.")
-    running_task = False
-    minimize()
+    if not running_task:
+        print(f"{datetime.now().strftime(TIME_FORMAT)}: No task is currently running. Press {START_HOTKEY} to start a task.")
+    else:
+        if running_break:
+            stop_break()  # stop break if running
+        task_end_time = datetime.now()
+        save_task()
+        running_task = False
 
+    time.sleep(DELAY_TIME)
+    minimize()
+    
+#checks if running break, stops it or starts it
 def toggle_break():
     global running_break, break_start_time, total_break_time
-    if not running_task:
-        restore()
-        print(f"{datetime.now().strftime(TIME_FORMAT)}: No task running.")
-        time.sleep(1.5)
-        minimize()
-        return
     restore()
-    if running_break:
+    if not running_task:
+        print(f"{datetime.now().strftime(TIME_FORMAT)}: No task running.")
+    elif running_break:
         stop_break()
+        return
     else:
         running_break = True
         break_start_time = datetime.now()
         print(f"{datetime.now().strftime(TIME_FORMAT)}: Break started.")
-        time.sleep(1)
-        minimize()
 
+    time.sleep(DELAY_TIME)
+    minimize()
+
+#stops break and calculates total_break_time
 def stop_break():
     global running_break, break_start_time, total_break_time
     if running_break:
         running_break = False
         now = datetime.now()
         total_break_time += now - break_start_time
-        print(f"{datetime.now().strftime(TIME_FORMAT)}: Break stopped, total break: {round(total_break_time.total_seconds()/60,2)} min")
-        time.sleep(1)
+        total_break_time = timedelta(seconds=int(total_break_time.total_seconds()))
+        print(f"{now.strftime(TIME_FORMAT)}: Break stopped, total break: {total_break_time}")
+        time.sleep(DELAY_TIME)
         minimize()
 
 keyboard.add_hotkey(START_HOTKEY, start_task)
