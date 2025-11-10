@@ -12,9 +12,9 @@ ctypes.windll.kernel32.SetConsoleTitleW("Time Tracker App")
 time.sleep(0.1) #sometimes the title wont be set before hwnd happens, so small delay
 hwnd = win32gui.FindWindow(None, "Time Tracker App")
 
-START_HOTKEY = "+"
-END_HOTKEY = "-"
-BREAK_HOTKEY = "*"
+START_HOTKEY = "f1"
+END_HOTKEY = "f2"
+BREAK_HOTKEY = "f3"
 DELAY_TIME = 2 #seconds
 
 running_task = False
@@ -41,22 +41,64 @@ CSV_FILE = os.path.join(BASE_DIR, "task.csv")
 
 file_exists = os.path.exists(CSV_FILE)
 
-try:
-    #open the file in append mode
-    with open(CSV_FILE, mode="a", newline="") as file:
-        writer = csv.writer(file)
-        print(f"CSV file path: {CSV_FILE}")
-        #write header only if file didn't exist
-        if not file_exists:
-            writer.writerow(["Task", "Start Time", "End Time", "Total Time (min)", "Break Time (min)", "Date"])
+while True:
+    try:
+        #open the file in append mode
+        with open(CSV_FILE, mode="a", newline="") as file:
+            writer = csv.writer(file)
+            print(f"CSV file path: {CSV_FILE}")
+            #write header only if file didn't exist
+            if not file_exists:
+                writer.writerow(["Task", "Start Time", "End Time", "Total Time (min)", "Break Time (min)", "Date"])
+            break
 
-#openign file error handler
-except Exception as e:
-    print("\n\n\n\n")
-    print(f"Error writing to {CSV_FILE}: {e}")
-    print("Be sure to close the CSV everywhere before running this program.")
-    input("Press enter to exit.")
-    raise SystemExit()
+    #openign file error handler
+    except Exception as e:
+        print(f"Error writing to {CSV_FILE}: {e}")
+        input("Close any programs using the CSV and press Enter to try again...")
+
+
+def update_settings():
+    global START_HOTKEY, END_HOTKEY, BREAK_HOTKEY, DELAY_TIME
+
+    while True:
+        START_HOTKEY = get_valid_hotkey("Enter START hotkey: ")
+        print(f"START hotkey set to: {START_HOTKEY}")
+        if input("Enter Y to save: ").upper() == "Y":
+            break
+
+    while True:
+        END_HOTKEY = get_valid_hotkey("Enter STOP hotkey: ")
+        print(f"END hotkey set to: {END_HOTKEY}")
+        if input("Enter Y to save: ").upper() == "Y":
+            break
+
+    while True:
+        BREAK_HOTKEY = get_valid_hotkey("Enter BREAK hotkey: ")
+        print(f"BREAK hotkey set to: {BREAK_HOTKEY}")
+        if input("Enter Y to save: ").upper() == "Y":
+            break
+
+    while True:
+        try:
+            DELAY_TIME = float(input("Enter how many seconds you want the terminal to pop-up: "))
+            print(f"Delay time set to: {DELAY_TIME} seconds")
+            if input("Enter Y to save: ").upper() == "Y":
+                break
+        except ValueError:
+            print("Please enter a valid number.")
+        
+    
+def get_valid_hotkey(prompt):
+    while True:
+        key = input(prompt).strip().lower()
+        try:
+            #test if it works by trying to add a temporary hotkey
+            keyboard.add_hotkey(key, lambda: None)
+            keyboard.remove_hotkey(key)
+            return key
+        except (ValueError, keyboard.KeyboardEvent):
+            print(f"'{key}' is not a valid key. Try again.")
 
 #short delay restore and minimize
 def short_restore():
@@ -157,6 +199,11 @@ def stop_break():
         print(f"{now.strftime(TIME_FORMAT)}: Break stopped, total break: {total_break_time}")
         time.sleep(DELAY_TIME)
         minimize()
+
+
+if input("Do you want to update the hotkeys and delay time of the console? Y/N or Enter to continue with defaults: ").upper() == "Y":
+    update_settings()
+    os.system('cls')
 
 keyboard.add_hotkey(START_HOTKEY, start_task)
 keyboard.add_hotkey(END_HOTKEY, end_task)
