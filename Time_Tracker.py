@@ -55,7 +55,7 @@ while True:
             print(f"CSV file path: {CSV_FILE}")
             #write header only if file didn't exist
             if not file_exists:
-                writer.writerow(["Task", "Start Time", "End Time", "Total Time (min)", "Break Time (min)", "Date"])
+                writer.writerow(["Task", "Start Time", "End Time", "Total Time", "Break Time", "Date"])
             break
 
     #openign file error handler
